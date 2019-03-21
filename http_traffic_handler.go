@@ -169,6 +169,7 @@ func (h *HTTPTrafficHandler) handleWebsocket(requestReader *bufio.Reader, respon
 }
 
 func (h *HTTPTrafficHandler) writeLine(a ...interface{}) {
+	return
 	fmt.Fprintln(h.buffer, a...)
 }
 
@@ -187,6 +188,9 @@ func (h *HTTPTrafficHandler) printHeader(header httpport.Header) {
 // print http request
 func (h *HTTPTrafficHandler) printRequest(req *httpport.Request) {
 	defer tcpreader.DiscardBytesToEOF(req.Body)
+	/* not print */
+	return
+
 	//TODO: expect-100 continue handle
 	if h.config.level == "url" {
 		h.writeLine(req.Method, req.Host+req.RequestURI)

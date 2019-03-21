@@ -36,6 +36,7 @@ type Config struct {
 	force      bool
 	pretty     bool
 	output     string
+	timeout    uint16
 }
 
 func listenOneSource(handle *pcap.Handle) chan gopacket.Packet {
@@ -104,6 +105,7 @@ func main() {
 	var device = flagSet.String("device", "any", "Capture packet from network device. If is any, capture all interface traffics")
 	var filterIP = flagSet.String("ip", "", "Filter by ip, if either source or target ip is matched, the packet will be processed")
 	var filterPort = flagSet.Uint("port", 0, "Filter by port, if either source or target port is matched, the packet will be processed.")
+	var timeout = flagSet.Uint("timeout", 1, "Timeout to exit, as minute.")
 	var host = flagSet.String("filter-host", "", "Filter by request host, using wildcard match(*, ?)")
 	var uri = flagSet.String("filter-uri", "", "Filter by request url path, using wildcard match(*, ?)")
 	var force = flagSet.Bool("force", false, "Force print unknown content-type http body even if it seems not to be text content")
@@ -125,6 +127,7 @@ func main() {
 		force:      *force,
 		pretty:     *pretty,
 		output:     *output,
+		timeout:    uint16(*timeout),
 	}
 
 	var packets chan gopacket.Packet
@@ -178,6 +181,8 @@ func main() {
 	assembler.filterPort = config.filterPort
 	var ticker = time.Tick(time.Second * 30)
 
+	var endTimer = time.Tick(time.Minute * time.Duration(config.timeout))
+
 outer:
 	for {
 		select {
@@ -199,6 +204,9 @@ outer:
 		case <-ticker:
 			// flush connections that haven't seen activity in the past 2 minutes.
 			assembler.flushOlderThan(time.Now().Add(time.Minute * -2))
+		case <-endTimer:
+			fmt.Println("Auto exit.")
+			break outer
 		}
 	}
 

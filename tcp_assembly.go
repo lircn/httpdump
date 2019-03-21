@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +27,17 @@ type TCPAssembler struct {
 	filterIP          string
 	filterPort        uint16
 }
+
+type TsInfo struct {
+	up          bool
+	reqFragment bool
+	repFragment bool
+	req1        time.Time
+	req2        time.Time
+	rep         time.Time
+}
+
+var gTsInfo map[string]TsInfo = map[string]TsInfo{}
 
 func newTCPAssembler(connectionHandler ConnectionHandler) *TCPAssembler {
 	return &TCPAssembler{connectionDict: map[string]*TCPConnection{}, connectionHandler: connectionHandler}
@@ -83,6 +96,7 @@ func (assembler *TCPAssembler) retrieveConnection(src, dst Endpoint, key string,
 			assembler.connectionHandler.handle(src, dst, connection)
 		}
 	}
+
 	return connection
 }
 
@@ -184,15 +198,39 @@ func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, t
 	}
 
 	var sendStream, confirmStream *NetworkStream
-	//var up bool
+	var up bool
 	if connection.clientID.equals(src) {
 		sendStream = connection.upStream
 		confirmStream = connection.downStream
-		//up = true
+		up = true
 	} else {
 		sendStream = connection.downStream
 		confirmStream = connection.upStream
-		//up = false
+		up = false
+	}
+
+	if isHTTPRequestData(payload) {
+		info := TsInfo{req1: timestamp, up: up, reqFragment: false, repFragment: false}
+		if len(payload) > 1400 {
+			info.reqFragment = true
+		}
+		gTsInfo[connection.key] = info
+	}
+	if gTsInfo[connection.key].up == up {
+		if info, ok := gTsInfo[connection.key]; ok {
+			info.req2 = timestamp
+			gTsInfo[connection.key] = info
+		}
+	}
+	if isHTTPReplyData(payload) {
+		if info, ok := gTsInfo[connection.key]; ok {
+			if len(payload) > 1400 {
+				info.repFragment = true
+			}
+			info.rep = timestamp
+			gTsInfo[connection.key] = info
+		}
+		printTsInfo(connection.key)
 	}
 
 	sendStream.appendPacket(tcp)
@@ -435,4 +473,26 @@ func isHTTPRequestData(body []byte) bool {
 
 	method := string(data[:idx])
 	return httpMethods[method]
+}
+
+func isHTTPReplyData(body []byte) bool {
+	if len(body) < 12 {
+		return false
+	}
+	if strings.EqualFold("HTTP/1.1 200", string(body[0:12])) {
+		return true
+	}
+	return false
+}
+
+func getInverseKey(key string) string {
+	s := strings.Split(key, "-")
+	return s[1] + "-" + s[0]
+}
+
+const gTimeFmt = "15:04:05.000000"
+
+func printTsInfo(key string) {
+	tsInfo := gTsInfo[key]
+	fmt.Println(key, tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep.Sub(tsInfo.req2), tsInfo.reqFragment, tsInfo.repFragment)
 }
