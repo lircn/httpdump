@@ -35,7 +35,9 @@ type TsInfo struct {
 	req1        time.Time
 	req2        time.Time
 	reqLen      int
-	rep         time.Time
+	rep1        time.Time
+	rep2        time.Time
+	repLen      int
 	id          string
 }
 
@@ -81,6 +83,7 @@ func (assembler *TCPAssembler) assemble(flow gopacket.Flow, tcp *layers.TCP, tim
 	connection.onReceive(src, dst, tcp, timestamp)
 
 	if connection.closed() {
+		printTsInfo(connection.key)
 		assembler.deleteConnection(key)
 		connection.finish()
 	}
@@ -219,22 +222,29 @@ func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, t
 		}
 		gTsInfo[connection.key] = info
 	}
-	if gTsInfo[connection.key].up == up && len(payload) > 100 {
+	if len(payload) > 100 { /* not only ack */
 		if info, ok := gTsInfo[connection.key]; ok {
-			info.req2 = timestamp
-			info.reqLen += len(payload)
+			if info.up == up {
+				info.req2 = timestamp
+				info.reqLen += len(payload)
+			} else {
+				info.rep2 = timestamp
+				info.repLen += len(payload)
+			}
 			gTsInfo[connection.key] = info
 		}
 	}
 	if isHTTPReplyData(payload) {
+		printTsInfo(connection.key)
 		if info, ok := gTsInfo[connection.key]; ok {
 			if len(payload) > 1400 {
 				info.repFragment = true
 			}
-			info.rep = timestamp
+			info.rep1 = timestamp
+			info.rep2 = timestamp
+			info.repLen = len(payload)
 			gTsInfo[connection.key] = info
 		}
-		printTsInfo(connection.key)
 	}
 
 	sendStream.appendPacket(tcp)
@@ -498,6 +508,10 @@ const gTimeFmt = "05.000000"
 
 func printTsInfo(key string) {
 	tsInfo := gTsInfo[key]
-	fmt.Printf("%s\t%s\t%s\t%s\t%s\t%d\t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep.Sub(tsInfo.req2), tsInfo.reqLen)
+	if tsInfo.rep1.Before(tsInfo.req2) {
+		return
+	}
+
+	fmt.Printf("%s \t%s \t%s \t%s \t%s \t%s \t%s \t%d \t%d \t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep1.Format(gTimeFmt), tsInfo.rep2.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep1.Sub(tsInfo.req2), tsInfo.rep2.Sub(tsInfo.rep1), tsInfo.reqLen, tsInfo.repLen)
 	fmt.Println(tsInfo.reqFragment, tsInfo.repFragment, tsInfo.id)
 }
