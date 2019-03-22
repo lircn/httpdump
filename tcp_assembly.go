@@ -36,6 +36,7 @@ type TsInfo struct {
 	req2        time.Time
 	reqLen      int
 	rep         time.Time
+	id          string
 }
 
 var gTsInfo map[string]TsInfo = map[string]TsInfo{}
@@ -212,6 +213,7 @@ func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, t
 
 	if isHTTPRequestData(payload) {
 		info := TsInfo{req1: timestamp, req2: timestamp, up: up, reqFragment: false, repFragment: false, reqLen: len(payload)}
+		info.id = src.String() + "-" + dst.String()
 		if info.reqLen > 1400 {
 			info.reqFragment = true
 		}
@@ -497,5 +499,5 @@ const gTimeFmt = "05.000000"
 func printTsInfo(key string) {
 	tsInfo := gTsInfo[key]
 	fmt.Printf("%s\t%s\t%s\t%s\t%s\t%d\t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep.Sub(tsInfo.req2), tsInfo.reqLen)
-	fmt.Println(tsInfo.reqFragment, tsInfo.repFragment, key)
+	fmt.Println(tsInfo.reqFragment, tsInfo.repFragment, tsInfo.id)
 }
