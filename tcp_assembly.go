@@ -34,6 +34,7 @@ type TsInfo struct {
 	repFragment bool
 	req1        time.Time
 	req2        time.Time
+	reqLen      int
 	rep         time.Time
 }
 
@@ -210,15 +211,16 @@ func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, t
 	}
 
 	if isHTTPRequestData(payload) {
-		info := TsInfo{req1: timestamp, up: up, reqFragment: false, repFragment: false}
-		if len(payload) > 1400 {
+		info := TsInfo{req1: timestamp, req2: timestamp, up: up, reqFragment: false, repFragment: false, reqLen: len(payload)}
+		if info.reqLen > 1400 {
 			info.reqFragment = true
 		}
 		gTsInfo[connection.key] = info
 	}
-	if gTsInfo[connection.key].up == up {
+	if gTsInfo[connection.key].up == up && len(payload) > 100 {
 		if info, ok := gTsInfo[connection.key]; ok {
 			info.req2 = timestamp
+			info.reqLen += len(payload)
 			gTsInfo[connection.key] = info
 		}
 	}
@@ -490,9 +492,10 @@ func getInverseKey(key string) string {
 	return s[1] + "-" + s[0]
 }
 
-const gTimeFmt = "15:04:05.000000"
+const gTimeFmt = "05.000000"
 
 func printTsInfo(key string) {
 	tsInfo := gTsInfo[key]
-	fmt.Println(key, tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep.Sub(tsInfo.req2), tsInfo.reqFragment, tsInfo.repFragment)
+	fmt.Printf("%s\t%s\t%s\t%s\t%s\t%d\t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep.Sub(tsInfo.req2), tsInfo.reqLen)
+	fmt.Println(tsInfo.reqFragment, tsInfo.repFragment, key)
 }
