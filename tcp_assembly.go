@@ -26,6 +26,7 @@ type TCPAssembler struct {
 	connectionHandler ConnectionHandler
 	filterIP          string
 	filterPort        uint16
+	printer           *Printer
 }
 
 type TsInfo struct {
@@ -43,8 +44,8 @@ type TsInfo struct {
 
 var gTsInfo map[string]TsInfo = map[string]TsInfo{}
 
-func newTCPAssembler(connectionHandler ConnectionHandler) *TCPAssembler {
-	return &TCPAssembler{connectionDict: map[string]*TCPConnection{}, connectionHandler: connectionHandler}
+func newTCPAssembler(connectionHandler ConnectionHandler, p *Printer) *TCPAssembler {
+	return &TCPAssembler{connectionDict: map[string]*TCPConnection{}, connectionHandler: connectionHandler, printer: p}
 }
 
 func (assembler *TCPAssembler) assemble(flow gopacket.Flow, tcp *layers.TCP, timestamp time.Time) {
@@ -80,10 +81,10 @@ func (assembler *TCPAssembler) assemble(flow gopacket.Flow, tcp *layers.TCP, tim
 		return
 	}
 
-	connection.onReceive(src, dst, tcp, timestamp)
+	connection.onReceive(src, dst, tcp, timestamp, assembler.PrintTsInfo)
 
 	if connection.closed() {
-		printTsInfo(connection.key)
+		assembler.PrintTsInfo(connection.key)
 		assembler.deleteConnection(key)
 		connection.finish()
 	}
@@ -188,7 +189,7 @@ func newTCPConnection(key string) *TCPConnection {
 }
 
 // when receive tcp packet
-func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, timestamp time.Time) {
+func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, timestamp time.Time, pFunc func(string)) {
 	connection.lastTimestamp = timestamp
 	payload := tcp.Payload
 
@@ -235,7 +236,7 @@ func (connection *TCPConnection) onReceive(src, dst Endpoint, tcp *layers.TCP, t
 		}
 	}
 	if isHTTPReplyData(payload) {
-		printTsInfo(connection.key)
+		pFunc(connection.key)
 		if info, ok := gTsInfo[connection.key]; ok {
 			if len(payload) > 1400 {
 				info.repFragment = true
@@ -506,12 +507,13 @@ func getInverseKey(key string) string {
 
 const gTimeFmt = "05.000000"
 
-func printTsInfo(key string) {
+func (assembler *TCPAssembler) PrintTsInfo(key string) {
 	tsInfo := gTsInfo[key]
 	if tsInfo.rep1.Before(tsInfo.req2) {
 		return
 	}
 
-	fmt.Printf("%s \t%s \t%s \t%s \t%s \t%s \t%s \t%d \t%d \t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep1.Format(gTimeFmt), tsInfo.rep2.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep1.Sub(tsInfo.req2), tsInfo.rep2.Sub(tsInfo.rep1), tsInfo.reqLen, tsInfo.repLen)
-	fmt.Println(tsInfo.reqFragment, tsInfo.repFragment, tsInfo.up, tsInfo.id)
+	assembler.printer.send(fmt.Sprintf("%s \t%s \t%s \t%s \t%s \t%s \t%s \t%d \t%d \t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep1.Format(gTimeFmt), tsInfo.rep2.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep1.Sub(tsInfo.req2), tsInfo.rep2.Sub(tsInfo.rep1), tsInfo.reqLen, tsInfo.repLen))
+	assembler.printer.send(fmt.Sprintln(tsInfo.reqFragment, tsInfo.repFragment, tsInfo.up, tsInfo.id))
+
 }

@@ -172,11 +172,12 @@ func main() {
 		return
 	}
 
+	pPrinter := newPrinter(*output)
 	var handler = &HTTPConnectionHandler{
 		config:  config,
-		printer: newPrinter(*output),
+		printer: pPrinter,
 	}
-	var assembler = newTCPAssembler(handler)
+	var assembler = newTCPAssembler(handler, pPrinter)
 	assembler.filterIP = config.filterIP
 	assembler.filterPort = config.filterPort
 	var ticker = time.Tick(time.Second * 30)
