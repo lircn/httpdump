@@ -513,7 +513,7 @@ func (assembler *TCPAssembler) PrintTsInfo(key string) {
 		return
 	}
 
-	assembler.printer.send(fmt.Sprintf("%s \t%s \t%s \t%s \t%s \t%s \t%s \t%d \t%d \t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep1.Format(gTimeFmt), tsInfo.rep2.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1), tsInfo.rep1.Sub(tsInfo.req2), tsInfo.rep2.Sub(tsInfo.rep1), tsInfo.reqLen, tsInfo.repLen))
+	assembler.printer.send(fmt.Sprintf("%s \t%s \t%s \t%s \t%d \t%d \t%d \t%d \t%d \t", tsInfo.req1.Format(gTimeFmt), tsInfo.req2.Format(gTimeFmt), tsInfo.rep1.Format(gTimeFmt), tsInfo.rep2.Format(gTimeFmt), tsInfo.req2.Sub(tsInfo.req1).Nanoseconds(), tsInfo.rep1.Sub(tsInfo.req2).Nanoseconds(), tsInfo.rep2.Sub(tsInfo.rep1).Nanoseconds(), tsInfo.reqLen, tsInfo.repLen))
 	assembler.printer.send(fmt.Sprintln(tsInfo.reqFragment, tsInfo.repFragment, tsInfo.up, tsInfo.id))
 
 }
